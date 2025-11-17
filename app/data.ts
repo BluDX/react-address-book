@@ -1,100 +1,180 @@
-////////////////////////////////////////////////////////////////////////////////
+// ============================================================================
+// DATA.TS - Fake database for storing and managing contacts
+// ============================================================================
 // 🛑 Nothing in here has anything to do with React Router, it's just a fake database
-////////////////////////////////////////////////////////////////////////////////
+// In a real app, you'd replace this with actual database calls or API requests
 
-import { matchSorter } from "match-sorter";
+// Import helper libraries
+import { matchSorter } from "match-sorter"; // Helps search/filter arrays
 // @ts-expect-error - no types, but it's a tiny function
-import sortBy from "sort-by";
-import invariant from "tiny-invariant";
+import sortBy from "sort-by"; // Helps sort arrays by properties
+import invariant from "tiny-invariant"; // Throws errors if conditions aren't met
 
+// ============================================================================
+// TYPE DEFINITIONS: Describes the shape of our data
+// ============================================================================
+
+// ContactMutation: Properties that can be changed on a contact
+// The ? means these properties are optional (they might not exist)
 type ContactMutation = {
-  id?: string;
-  first?: string;
-  last?: string;
-  avatar?: string;
-  twitter?: string;
-  notes?: string;
-  favorite?: boolean;
+  id?: string;       // Unique identifier (optional when creating)
+  first?: string;    // First name
+  last?: string;     // Last name
+  avatar?: string;   // URL to profile picture
+  twitter?: string;  // Twitter handle
+  notes?: string;    // Additional notes about the contact
+  favorite?: boolean; // Whether this contact is marked as favorite
 };
 
+// ContactRecord: A complete contact with required fields
+// This extends ContactMutation and adds mandatory properties
 export type ContactRecord = ContactMutation & {
-  id: string;
-  createdAt: string;
+  id: string;        // ID is required for saved contacts
+  createdAt: string; // Timestamp when contact was created
 };
 
-////////////////////////////////////////////////////////////////////////////////
-// This is just a fake DB table. In a real app you'd be talking to a real db or
-// fetching from an existing API.
+// ============================================================================
+// FAKE DATABASE: An object that acts like a database table
+// ============================================================================
+// This is just a JavaScript object stored in memory
+// When you refresh the page, all data is lost (in a real app, data persists)
 const fakeContacts = {
+  // records: An object that stores contacts by their ID
+  // Example: { "john-doe": {id: "john-doe", first: "John", ...}, ... }
   records: {} as Record<string, ContactRecord>,
 
+  // GET ALL CONTACTS: Returns an array of all contacts
   async getAll(): Promise<ContactRecord[]> {
+    // Object.keys gets all the IDs from our records object
     return Object.keys(fakeContacts.records)
+      // Map each ID to its corresponding contact record
       .map((key) => fakeContacts.records[key])
+      // Sort by createdAt (newest first) then by last name
       .sort(sortBy("-createdAt", "last"));
+      // The "-" before createdAt means descending order
   },
 
+  // GET ONE CONTACT: Returns a single contact by ID
   async get(id: string): Promise<ContactRecord | null> {
+    // Look up the contact by ID, return null if not found
     return fakeContacts.records[id] || null;
   },
 
+  // CREATE A CONTACT: Adds a new contact to our database
   async create(values: ContactMutation): Promise<ContactRecord> {
+    // Generate a random ID if one wasn't provided
+    // Math.random() creates a decimal, .toString(36) converts to base-36
+    // .substring(2, 9) takes characters 2-9 for a short random string
     const id = values.id || Math.random().toString(36).substring(2, 9);
+    
+    // Get the current timestamp in ISO format
     const createdAt = new Date().toISOString();
+    
+    // Create the new contact object by combining values with id and createdAt
     const newContact = { id, createdAt, ...values };
+    // ...values spreads all the properties from the values object
+    
+    // Store the new contact in our records object
     fakeContacts.records[id] = newContact;
+    
+    // Return the newly created contact
     return newContact;
   },
 
+  // UPDATE A CONTACT: Modifies an existing contact
   async set(id: string, values: ContactMutation): Promise<ContactRecord> {
+    // First, get the existing contact
     const contact = await fakeContacts.get(id);
+    
+    // Make sure the contact exists - throw an error if it doesn't
     invariant(contact, `No contact found for ${id}`);
+    
+    // Create an updated contact by merging existing data with new values
     const updatedContact = { ...contact, ...values };
+    // Properties in values will overwrite properties in contact
+    
+    // Save the updated contact back to our records
     fakeContacts.records[id] = updatedContact;
+    
+    // Return the updated contact
     return updatedContact;
   },
 
+  // DELETE A CONTACT: Removes a contact from the database
   destroy(id: string): null {
+    // Delete the contact from our records object
     delete fakeContacts.records[id];
+    // Return null to indicate success
     return null;
   },
 };
 
-////////////////////////////////////////////////////////////////////////////////
-// Handful of helper functions to be called from route loaders and actions
+// ============================================================================
+// HELPER FUNCTIONS: Easy-to-use functions for route components
+// ============================================================================
+// These are the functions that your route components will actually call
+
+// GET CONTACTS WITH OPTIONAL SEARCH: Returns all contacts, optionally filtered
 export async function getContacts(query?: string | null) {
+  // Simulate a delay like a real database would have (500 milliseconds)
   await new Promise((resolve) => setTimeout(resolve, 500));
+  
+  // Get all contacts from our fake database
   let contacts = await fakeContacts.getAll();
+  
+  // If a search query was provided, filter the contacts
   if (query) {
+    // matchSorter searches through contacts and returns matches
     contacts = matchSorter(contacts, query, {
-      keys: ["first", "last"],
+      keys: ["first", "last"], // Search in first and last name fields
     });
   }
+  
+  // Sort results by last name, then by creation date
   return contacts.sort(sortBy("last", "createdAt"));
 }
 
+// CREATE EMPTY CONTACT: Creates a new contact with no information
 export async function createEmptyContact() {
+  // Create a contact with an empty object (all fields will be undefined)
   const contact = await fakeContacts.create({});
   return contact;
 }
 
+// GET CONTACT BY ID: Returns a specific contact
 export async function getContact(id: string) {
+  // Simply call the get method from our fake database
   return fakeContacts.get(id);
 }
 
+// UPDATE CONTACT: Changes information for a specific contact
 export async function updateContact(id: string, updates: ContactMutation) {
+  // First, get the existing contact to make sure it exists
   const contact = await fakeContacts.get(id);
+  
+  // If contact doesn't exist, throw an error
   if (!contact) {
     throw new Error(`No contact found for ${id}`);
   }
+  
+  // Update the contact by merging existing data with updates
   await fakeContacts.set(id, { ...contact, ...updates });
+  
+  // Return the contact (note: this returns the OLD contact, not the updated one)
+  // This is likely a bug in the original code
   return contact;
 }
 
+// DELETE CONTACT: Removes a contact completely
 export async function deleteContact(id: string) {
+  // Call the destroy method to delete the contact
   fakeContacts.destroy(id);
 }
 
+// ============================================================================
+// INITIAL DATA: Pre-populate the database with some contacts
+// ============================================================================
+// This array contains starter data - famous people from the React Router team
 [
   {
     avatar:
@@ -309,11 +389,23 @@ export async function deleteContact(id: string) {
     twitter: "@jenseng",
   },
 ].forEach((contact) => {
+  // For each contact in the array, create it in our fake database
   fakeContacts.create({
-    ...contact,
+    ...contact, // Spread all the contact properties
+    // Generate a consistent ID from the person's name
+    // Example: "Ryan Florence" becomes "ryan-florence"
     id: `${contact.first
-      .toLowerCase()
-      .split(" ")
-      .join("_")}-${contact.last.toLocaleLowerCase()}`,
+      .toLowerCase()           // Make lowercase: "ryan"
+      .split(" ")              // Split on spaces: ["ryan"]
+      .join("_")}-${contact.last.toLocaleLowerCase()}`, // Join with underscore and add last name
   });
 });
+
+// ============================================================================
+// HOW DATA.TS CONNECTS TO OTHER FILES:
+// ============================================================================
+// 1. Route components (like sidebar.tsx, contact.tsx) import functions from here
+// 2. They call functions like getContacts(), updateContact(), etc.
+// 3. These functions interact with the fakeContacts object (our "database")
+// 4. The data is returned to the route components
+// 5. The route components display the data to the user
